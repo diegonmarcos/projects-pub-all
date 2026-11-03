@@ -1,0 +1,10 @@
+#!/bin/sh
+# After each commit: register new top-level project folders in the CI deploy list and
+# commit that change on its own. Installed by setup.sh (core.hooksPath=.githooks).
+[ -n "$REGISTER_PROJECTS_RUNNING" ] && exit 0
+top=$(git rev-parse --show-toplevel) || exit 0
+added=$(node "$top/.githooks/register-projects.js" "$top") || exit 0
+[ -z "$added" ] && exit 0
+git add "$top/.github/workflows/ship.yml"
+REGISTER_PROJECTS_RUNNING=1 git commit -q --no-verify -m "ci: register projects $added in the deploy list" >/dev/null
+echo "post-commit: registered $added in .github/workflows/ship.yml"

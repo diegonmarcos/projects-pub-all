@@ -1,0 +1,56 @@
+# GitHub Pages deployment, same pattern as the diegonmarcos.github.io front ship.yml:
+# configure-pages -> assemble _site from each project's dist/ -> upload-pages-artifact -> deploy-pages.
+# The deploy list is the PROJECTS_JSON block at the END of this file (env). .githooks/post-commit
+# appends every new top-level {name-site}/dist/ folder to it; run `sh setup.sh` once per clone.
+name: GitHub Pages Deployment (CI)
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      - name: Setup Pages Environment
+        uses: actions/configure-pages@v5
+      - name: Deploy All Projects to _site
+        run: |
+          mkdir -p _site
+          links=""
+          for row in $(echo "$PROJECTS_JSON" | jq -r '.[] | "\(.name)=\(.dist)"'); do
+            name="${row%%=*}"; dist="${row#*=}"
+            [ -d "$dist" ] || { echo "skip $name: $dist missing"; continue; }
+            mkdir -p "_site/$name"; cp -rL "$dist"/. "_site/$name/"
+            links="$links<li><a href=\"$name/\">$name</a></li>"
+            echo "deployed $name"
+          done
+          [ -f _site/index.html ] || printf '<!doctype html><meta charset="utf-8"><title>projects-pub-all</title><h1>Projects</h1><ul>%s</ul>\n' "$links" > _site/index.html
+      - name: Upload Pages Artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+env:
+  # Deploy list (declared config). Keep this block LAST; the hook appends entries here.
+  PROJECTS_JSON: |
+    [
+      {"name": "hello-site", "dist": "hello-site/dist"}
+    ]
