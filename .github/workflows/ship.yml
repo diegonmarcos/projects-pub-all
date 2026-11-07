@@ -1,7 +1,8 @@
 # GitHub Pages deployment, same pattern as the diegonmarcos.github.io front ship.yml:
 # configure-pages -> assemble _site from each project's dist/ -> upload-pages-artifact -> deploy-pages.
-# The deploy list is the PROJECTS_JSON block at the END of this file (env). .githooks/post-commit
-# appends every new top-level {name-site}/dist/ folder to it; run `sh setup.sh` once per clone.
+# The deploy list is the PROJECTS_JSON block at the END of this file (env) PLUS every top-level folder not yet in it:
+# the build step runs `.githooks/register-projects.js --list`, so a new root folder deploys on the push that adds it,
+# with no manual setup. The local post-commit hook (sh setup.sh) only writes the same entries into the block.
 name: GitHub Pages Deployment (CI)
 on:
   push:
@@ -22,11 +23,13 @@ jobs:
         uses: actions/checkout@v4
       - name: Setup Pages Environment
         uses: actions/configure-pages@v5
+      - name: Self-test the project registrar
+        run: node .githooks/register-projects.test.js
       - name: Deploy All Projects to _site
         run: |
           mkdir -p _site
           links=""
-          for row in $(echo "$PROJECTS_JSON" | jq -r '.[] | "\(.name)=\(.dist)"'); do
+          for row in $(node .githooks/register-projects.js --list | jq -r '.[] | "\(.name)=\(.dist)"'); do
             name="${row%%=*}"; dist="${row#*=}"
             [ -d "$dist" ] || { echo "skip $name: $dist missing"; continue; }
             mkdir -p "_site/$name"; cp -rL "$dist"/. "_site/$name/"
